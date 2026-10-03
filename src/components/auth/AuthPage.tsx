@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
-import { Zap, Lock, AtSign, User as UserIcon, Eye, EyeOff, ArrowRight, Sun, Moon } from 'lucide-react';
+import { Zap, Lock, AtSign, User as UserIcon, Eye, EyeOff, ArrowRight, Sun, Moon, Crown } from 'lucide-react';
 
 export const AuthPage: React.FC = () => {
   const { login, signup, isLoading } = useAuth();
@@ -13,6 +13,7 @@ export const AuthPage: React.FC = () => {
   const [displayName, setDisplayName] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [bio, setBio] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -20,7 +21,7 @@ export const AuthPage: React.FC = () => {
     setErrorMsg(null);
 
     if (isSignUp) {
-      const res = await signup(username, password, displayName);
+      const res = await signup(username, password, displayName, bio);
       if (!res.success && res.error) {
         setErrorMsg(res.error);
       }
@@ -64,8 +65,11 @@ export const AuthPage: React.FC = () => {
             Glitch
           </h1>
           <p className={`text-xs mt-1 ${isLight ? 'text-neutral-500' : 'text-neutral-400'}`}>
-            Fast, minimal, real-time messaging.
+            Live messaging across all devices.
           </p>
+          <div className="mt-2 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[10px] text-emerald-500 font-medium">
+            <span>🔒 Permanent Accounts · Protected Usernames</span>
+          </div>
         </div>
 
         {/* Auth Box */}
@@ -182,6 +186,30 @@ export const AuthPage: React.FC = () => {
               </div>
             )}
 
+            {/* Custom Bio (User adds their own) */}
+            {isSignUp && (
+              <div>
+                <label
+                  className={`block text-[11px] font-semibold uppercase tracking-wider mb-1 ${
+                    isLight ? 'text-neutral-600' : 'text-neutral-400'
+                  }`}
+                >
+                  Your Bio (Optional)
+                </label>
+                <textarea
+                  value={bio}
+                  onChange={(e) => setBio(e.target.value)}
+                  placeholder="Tell others about yourself..."
+                  rows={2}
+                  className={`w-full rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 resize-none transition-colors ${
+                    isLight
+                      ? 'bg-neutral-100 border border-neutral-200 text-neutral-900 placeholder:text-neutral-400'
+                      : 'bg-neutral-950 border border-neutral-800 text-neutral-100 placeholder:text-neutral-600'
+                  }`}
+                />
+              </div>
+            )}
+
             {/* Password Input */}
             <div>
               <label
@@ -229,6 +257,33 @@ export const AuthPage: React.FC = () => {
                 </>
               )}
             </button>
+
+            {!isSignUp && (
+              <div className="pt-2">
+                <div className="relative flex py-1 items-center">
+                  <div className={`flex-grow border-t ${isLight ? 'border-neutral-200' : 'border-neutral-800'}`} />
+                  <span className={`flex-shrink mx-2 text-[10px] uppercase font-bold tracking-wider ${isLight ? 'text-neutral-400' : 'text-neutral-500'}`}>
+                    Owner Access
+                  </span>
+                  <div className={`flex-grow border-t ${isLight ? 'border-neutral-200' : 'border-neutral-800'}`} />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUsername('glitch');
+                    setPassword('nack __123');
+                  }}
+                  className={`w-full py-2 px-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors ${
+                    isLight
+                      ? 'bg-amber-500/10 hover:bg-amber-500/20 border-amber-500/30 text-amber-900'
+                      : 'bg-amber-500/10 hover:bg-amber-500/20 border-amber-500/30 text-amber-300'
+                  }`}
+                >
+                  <Crown className="w-3.5 h-3.5 fill-current text-amber-500" />
+                  <span>Fill Owner (@glitch - NAOL)</span>
+                </button>
+              </div>
+            )}
           </form>
         </div>
 

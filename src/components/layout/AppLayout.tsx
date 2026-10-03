@@ -23,14 +23,18 @@ import {
   Info,
   Heart,
   Users,
+  MessageSquare,
+  Globe,
+  User as UserIcon,
 } from 'lucide-react';
 import { NewChatModal } from '../modals/NewChatModal';
 import { ProfileModal } from '../modals/ProfileModal';
 import { GroupInfoModal } from '../modals/GroupInfoModal';
-import { Message } from '../../types';
+import { UserProfileModal } from '../modals/UserProfileModal';
+import { Message, User } from '../../types';
 
 export const AppLayout: React.FC = () => {
-  const { currentUser } = useAuth();
+  const { currentUser, registeredUsers } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const isLight = theme === 'light';
 
@@ -50,11 +54,13 @@ export const AppLayout: React.FC = () => {
     sendTyping,
   } = useChat();
 
+  const [sidebarTab, setSidebarTab] = useState<'chats' | 'users'>('chats');
   const [search, setSearch] = useState('');
   const [inputText, setInputText] = useState('');
   const [showNewChat, setShowNewChat] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showGroupInfo, setShowGroupInfo] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [showMenu, setShowMenu] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
@@ -136,9 +142,21 @@ export const AppLayout: React.FC = () => {
     setShowEmojiPicker(false);
   };
 
+  // Filter conversations
   const filteredConversations = conversations.filter((c) =>
     c.name.toLowerCase().includes(search.toLowerCase())
   );
+
+  // Filter registered users present in Glitch
+  const filteredUsers = registeredUsers.filter((u) => {
+    const q = search.toLowerCase().replace(/^@/, '').trim();
+    if (!q) return true;
+    return (
+      u.username.toLowerCase().includes(q) ||
+      u.name.toLowerCase().includes(q) ||
+      (u.bio && u.bio.toLowerCase().includes(q))
+    );
+  });
 
   const activeTyping = activeConversationId
     ? typingUsers[activeConversationId] || []
@@ -151,6 +169,37 @@ export const AppLayout: React.FC = () => {
     } catch {
       return '';
     }
+  };
+
+  const handleOpenUserChat = (user: User) => {
+    startDirectChat(user.username, user);
+    setSelectedUser(null);
+  };
+
+  // Determine if other participant in active direct chat is online
+  const isDirectPartnerOnline = () => {
+    if (!activeConversation || activeConversation.type === 'group') return false;
+    const partnerId = activeConversation.participantIds.find(
+      (p) => p.toLowerCase() !== currentUser?.username.toLowerCase() && p !== currentUser?.id
+    );
+    if (!partnerId) return false;
+    const partner = registeredUsers.find(
+      (u) => u.username.toLowerCase() === partnerId.toLowerCase() || u.id === partnerId
+    );
+    return partner?.status === 'online';
+  };
+
+  const getDirectPartnerUser = (): User | null => {
+    if (!activeConversation || activeConversation.type === 'group') return null;
+    const partnerId = activeConversation.participantIds.find(
+      (p) => p.toLowerCase() !== currentUser?.username.toLowerCase() && p !== currentUser?.id
+    );
+    if (!partnerId) return null;
+    return (
+      registeredUsers.find(
+        (u) => u.username.toLowerCase() === partnerId.toLowerCase() || u.id === partnerId
+      ) || null
+    );
   };
 
   return (
@@ -168,17 +217,15 @@ export const AppLayout: React.FC = () => {
         className="hidden"
       />
 
-      {/* 1. CHAT LIST (FULL WIDTH ON MOBILE WHEN NO ACTIVE CHAT, SIDEBAR ON DESKTOP) */}
+      {/* 1. CHAT & USERS SIDEBAR */}
       <div
         className={`${
           activeConversation ? 'hidden md:flex' : 'flex'
         } w-full md:w-80 lg:w-96 h-full flex-col border-r shrink-0 transition-colors duration-150 ${
-          isLight
-            ? 'bg-white border-neutral-200'
-            : 'bg-neutral-950 border-neutral-800/80'
+          isLight ? 'bg-white border-neutral-200' : 'bg-neutral-950 border-neutral-800/80'
         }`}
       >
-        {/* Mobile Simple Header */}
+        {/* Top Header */}
         <div
           className={`p-3.5 border-b flex items-center justify-between ${
             isLight ? 'border-neutral-200 bg-white/90' : 'border-neutral-800/80 bg-neutral-950'
@@ -188,9 +235,15 @@ export const AppLayout: React.FC = () => {
             <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 flex items-center justify-center">
               <Zap className="w-4 h-4 fill-emerald-500" />
             </div>
-            <span className="font-bold text-base tracking-tight">
-              Glitch
-            </span>
+            <div>
+              <span className="font-bold text-base tracking-tight block leading-none">
+                Glitch
+              </span>
+              <span className="text-[10px] text-emerald-500 font-mono font-medium flex items-center gap-1 mt-0.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Live Everywhere
+              </span>
+            </div>
           </div>
 
           <div className="flex items-center gap-1.5">
@@ -238,6 +291,45 @@ export const AppLayout: React.FC = () => {
           </div>
         </div>
 
+        {/* Tab Switcher: Chats vs People Present in Glitch */}
+        <div className={`p-2.5 border-b ${isLight ? 'border-neutral-200 bg-neutral-50/50' : 'border-neutral-800/60 bg-neutral-900/40'}`}>
+          <div
+            className={`flex p-1 rounded-xl text-xs font-semibold ${
+              isLight ? 'bg-neutral-200/60' : 'bg-neutral-900 border border-neutral-800'
+            }`}
+          >
+            <button
+              type="button"
+              onClick={() => setSidebarTab('chats')}
+              className={`flex-1 py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-colors ${
+                sidebarTab === 'chats'
+                  ? isLight
+                    ? 'bg-white text-neutral-900 shadow-xs'
+                    : 'bg-neutral-800 text-white shadow-xs'
+                  : 'text-neutral-400 hover:text-neutral-200'
+              }`}
+            >
+              <MessageSquare className="w-3.5 h-3.5" />
+              <span>Chats ({conversations.length})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSidebarTab('users')}
+              className={`flex-1 py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-colors ${
+                sidebarTab === 'users'
+                  ? isLight
+                    ? 'bg-white text-neutral-900 shadow-xs'
+                    : 'bg-neutral-800 text-white shadow-xs'
+                  : 'text-neutral-400 hover:text-neutral-200'
+              }`}
+            >
+              <Globe className="w-3.5 h-3.5 text-emerald-500" />
+              <span>In Glitch ({registeredUsers.length})</span>
+            </button>
+          </div>
+        </div>
+
         {/* Search Bar */}
         <div className={`p-3 border-b ${isLight ? 'border-neutral-200' : 'border-neutral-800/40'}`}>
           <div className="relative">
@@ -246,7 +338,7 @@ export const AppLayout: React.FC = () => {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search conversations..."
+              placeholder={sidebarTab === 'chats' ? 'Search conversations...' : 'Search users in Glitch...'}
               className={`w-full rounded-xl pl-8 pr-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-colors ${
                 isLight
                   ? 'bg-neutral-100 border border-neutral-200 text-neutral-900 placeholder:text-neutral-400'
@@ -256,105 +348,197 @@ export const AppLayout: React.FC = () => {
           </div>
         </div>
 
-        {/* Conversation Items */}
-        <div className="flex-1 overflow-y-auto p-2 space-y-1">
-          {conversations.length === 0 ? (
-            <div className="py-12 px-6 text-center text-xs flex flex-col items-center">
-              <div
-                className={`w-12 h-12 rounded-2xl border flex items-center justify-center mb-3 ${
-                  isLight ? 'bg-neutral-100 border-neutral-200' : 'bg-neutral-900 border-neutral-800'
-                }`}
-              >
-                <AtSign className="w-5 h-5 text-emerald-500" />
-              </div>
-              <h3 className="font-semibold mb-1">
-                No chats yet
-              </h3>
-              <p className={`text-[11px] max-w-xs mb-4 ${isLight ? 'text-neutral-500' : 'text-neutral-400'}`}>
-                Tap the + button to start messaging users present on data or create a group.
-              </p>
-              <div className="flex flex-col gap-2 w-full max-w-xs">
-                <button
-                  type="button"
-                  onClick={() => setShowNewChat(true)}
-                  className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 shadow-sm shadow-emerald-600/20"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Start New Chat / Group</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => startDirectChat('Saved Notes')}
-                  className={`w-full py-2 border rounded-xl text-xs font-medium transition-colors flex items-center justify-center gap-1.5 ${
-                    isLight
-                      ? 'bg-white hover:bg-neutral-100 border-neutral-200 text-neutral-700'
-                      : 'bg-neutral-900 hover:bg-neutral-800 border-neutral-800 text-neutral-300'
-                  }`}
-                >
-                  <Bookmark className="w-3.5 h-3.5 text-emerald-500" />
-                  <span>Open Saved Notes</span>
-                </button>
-              </div>
-            </div>
-          ) : (
-            filteredConversations.map((conv) => {
-              const isActive = conv.id === activeConversationId;
-              return (
+        {/* Sidebar Content (Chats or Registered Users in Glitch) */}
+        {sidebarTab === 'chats' ? (
+          <div className="flex-1 overflow-y-auto p-2 space-y-1">
+            {conversations.length === 0 ? (
+              <div className="py-12 px-6 text-center text-xs flex flex-col items-center">
                 <div
-                  key={conv.id}
-                  onClick={() => setActiveConversationId(conv.id)}
-                  className={`p-3 rounded-2xl cursor-pointer flex items-center justify-between gap-3 transition-colors ${
-                    isActive
-                      ? isLight
-                        ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-950 font-medium'
-                        : 'bg-neutral-900 text-white border border-neutral-800'
-                      : isLight
-                      ? 'hover:bg-neutral-100 text-neutral-700 border border-transparent'
-                      : 'hover:bg-neutral-900/60 text-neutral-300 border border-transparent'
+                  className={`w-12 h-12 rounded-2xl border flex items-center justify-center mb-3 ${
+                    isLight ? 'bg-neutral-100 border-neutral-200' : 'bg-neutral-900 border-neutral-800'
                   }`}
                 >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <img
-                      src={conv.avatar}
-                      alt={conv.name}
-                      className={`w-11 h-11 rounded-2xl object-cover shrink-0 ${
-                        isLight ? 'bg-neutral-100 ring-1 ring-neutral-200' : 'bg-neutral-900 ring-1 ring-neutral-800'
-                      }`}
-                    />
-                    <div className="min-w-0">
-                      <div className="font-semibold text-xs truncate flex items-center gap-1.5">
-                        <span>{conv.name}</span>
-                        {conv.type === 'group' && (
-                          <span className="text-[9px] px-1 py-0.2 rounded-md bg-neutral-800/20 text-neutral-500 font-medium">
-                            Group
-                          </span>
+                  <AtSign className="w-5 h-5 text-emerald-500" />
+                </div>
+                <h3 className="font-semibold mb-1">
+                  No active chats
+                </h3>
+                <p className={`text-[11px] max-w-xs mb-4 ${isLight ? 'text-neutral-500' : 'text-neutral-400'}`}>
+                  Tap the + button or open "In Glitch" to message any registered user.
+                </p>
+                <div className="flex flex-col gap-2 w-full max-w-xs">
+                  <button
+                    type="button"
+                    onClick={() => setSidebarTab('users')}
+                    className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 shadow-sm shadow-emerald-600/20"
+                  >
+                    <Globe className="w-3.5 h-3.5" />
+                    <span>See Users in Glitch</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => startDirectChat('Saved Notes')}
+                    className={`w-full py-2 border rounded-xl text-xs font-medium transition-colors flex items-center justify-center gap-1.5 ${
+                      isLight
+                        ? 'bg-white hover:bg-neutral-100 border-neutral-200 text-neutral-700'
+                        : 'bg-neutral-900 hover:bg-neutral-800 border-neutral-800 text-neutral-300'
+                    }`}
+                  >
+                    <Bookmark className="w-3.5 h-3.5 text-emerald-500" />
+                    <span>Open Saved Notes</span>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              filteredConversations.map((conv) => {
+                const isActive = conv.id === activeConversationId;
+                return (
+                  <div
+                    key={conv.id}
+                    onClick={() => setActiveConversationId(conv.id)}
+                    className={`p-3 rounded-2xl cursor-pointer flex items-center justify-between gap-3 transition-colors ${
+                      isActive
+                        ? isLight
+                          ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-950 font-medium'
+                          : 'bg-neutral-900 text-white border border-neutral-800'
+                        : isLight
+                        ? 'hover:bg-neutral-100 text-neutral-700 border border-transparent'
+                        : 'hover:bg-neutral-900/60 text-neutral-300 border border-transparent'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="relative shrink-0">
+                        <img
+                          src={conv.avatar}
+                          alt={conv.name}
+                          className={`w-11 h-11 rounded-2xl object-cover ${
+                            isLight ? 'bg-neutral-100 ring-1 ring-neutral-200' : 'bg-neutral-900 ring-1 ring-neutral-800'
+                          }`}
+                        />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="font-semibold text-xs truncate flex items-center gap-1.5">
+                          <span>{conv.name}</span>
+                          {conv.type === 'group' && (
+                            <span className="text-[9px] px-1 py-0.2 rounded-md bg-neutral-800/20 text-neutral-500 font-medium">
+                              Group
+                            </span>
+                          )}
+                        </div>
+                        <div
+                          className={`text-[11px] truncate mt-0.5 ${
+                            isLight ? 'text-neutral-500' : 'text-neutral-400'
+                          }`}
+                        >
+                          {conv.lastMessage?.text || 'No messages yet'}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="text-right shrink-0 flex flex-col items-end">
+                      <div className="text-[10px] text-neutral-400 font-mono">
+                        {conv.lastMessage ? formatTime(conv.lastMessage.createdAt) : ''}
+                      </div>
+                      {conv.unreadCount > 0 && (
+                        <span
+                          className="mt-1 px-1.5 py-0.5 rounded-full bg-emerald-500 text-[10px] font-bold text-white font-mono animate-pulse shadow-xs"
+                          title="New messages sent for receiver (not for sender)"
+                        >
+                          {conv.unreadCount} new
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        ) : (
+          /* USERS PRESENT IN GLITCH (SERVER AUTHORITATIVE LIST) */
+          <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
+            <div className="px-2 py-1 flex items-center justify-between text-[11px] text-neutral-400 uppercase tracking-wider font-semibold">
+              <span>All Registered Accounts</span>
+              <span>{registeredUsers.length} total</span>
+            </div>
+
+            {filteredUsers.length === 0 ? (
+              <div className="py-8 text-center text-xs text-neutral-400">
+                No users found matching "{search}".
+              </div>
+            ) : (
+              filteredUsers.map((user) => {
+                const isMe = user.username.toLowerCase() === currentUser?.username.toLowerCase();
+                const isOnline = user.status === 'online';
+
+                return (
+                  <div
+                    key={user.id}
+                    onClick={() => setSelectedUser(user)}
+                    className={`p-2.5 rounded-2xl border cursor-pointer flex items-center justify-between gap-3 transition-colors ${
+                      isLight
+                        ? 'bg-neutral-50 hover:bg-emerald-50/60 border-neutral-200 hover:border-emerald-300 text-neutral-900'
+                        : 'bg-neutral-900/60 hover:bg-neutral-800 border-neutral-800 hover:border-neutral-700 text-neutral-100'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="relative shrink-0">
+                        <img
+                          src={user.avatar}
+                          alt={user.name}
+                          className="w-10 h-10 rounded-xl object-cover ring-1 ring-emerald-500/20 bg-neutral-900"
+                        />
+                        <span
+                          className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 ${
+                            isLight ? 'border-white' : 'border-neutral-950'
+                          } ${isOnline ? 'bg-emerald-500' : 'bg-neutral-500'}`}
+                          title={isOnline ? 'Online now' : 'Offline'}
+                        />
+                      </div>
+
+                      <div className="min-w-0">
+                        <div className="font-semibold text-xs truncate flex items-center gap-1.5">
+                          <span>{user.name}</span>
+                          {isMe && (
+                            <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-500 font-medium">
+                              You
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[11px] text-emerald-500 font-mono truncate">
+                          @{user.username}
+                        </div>
+                        {user.bio && (
+                          <div
+                            className={`text-[10px] truncate mt-0.5 ${
+                              isLight ? 'text-neutral-500' : 'text-neutral-400'
+                            }`}
+                          >
+                            {user.bio}
+                          </div>
                         )}
                       </div>
-                      <div
-                        className={`text-[11px] truncate mt-0.5 ${
-                          isLight ? 'text-neutral-500' : 'text-neutral-400'
-                        }`}
-                      >
-                        {conv.lastMessage?.text || 'No messages yet'}
-                      </div>
                     </div>
-                  </div>
 
-                  <div className="text-right shrink-0 flex flex-col items-end">
-                    <div className="text-[10px] text-neutral-400 font-mono">
-                      {conv.lastMessage ? formatTime(conv.lastMessage.createdAt) : ''}
+                    <div className="shrink-0 flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenUserChat(user);
+                        }}
+                        className="py-1 px-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-semibold flex items-center gap-1 transition-colors"
+                        title="Chat with user"
+                      >
+                        <MessageSquare className="w-3 h-3" />
+                        <span>Chat</span>
+                      </button>
                     </div>
-                    {conv.unreadCount > 0 && (
-                      <span className="mt-1 px-1.5 py-0.5 rounded-full bg-emerald-500 text-[10px] font-bold text-white font-mono">
-                        {conv.unreadCount}
-                      </span>
-                    )}
                   </div>
-                </div>
-              );
-            })
-          )}
-        </div>
+                );
+              })
+            )}
+          </div>
+        )}
       </div>
 
       {/* 2. ACTIVE CHAT CANVAS */}
@@ -374,10 +558,13 @@ export const AppLayout: React.FC = () => {
               onClick={() => {
                 if (activeConversation.type === 'group') {
                   setShowGroupInfo(true);
+                } else {
+                  const partner = getDirectPartnerUser();
+                  if (partner) setSelectedUser(partner);
                 }
               }}
               className="flex items-center gap-3 min-w-0 cursor-pointer group"
-              title={activeConversation.type === 'group' ? 'View and edit group profile & members' : ''}
+              title={activeConversation.type === 'group' ? 'View and edit group info' : 'View user profile'}
             >
               <button
                 type="button"
@@ -393,11 +580,20 @@ export const AppLayout: React.FC = () => {
                 <ArrowLeft className="w-5 h-5" />
               </button>
 
-              <img
-                src={activeConversation.avatar}
-                alt={activeConversation.name}
-                className="w-9 h-9 rounded-xl object-cover shrink-0 ring-1 ring-emerald-500/30 group-hover:scale-105 transition-transform"
-              />
+              <div className="relative shrink-0">
+                <img
+                  src={activeConversation.avatar}
+                  alt={activeConversation.name}
+                  className="w-9 h-9 rounded-xl object-cover ring-1 ring-emerald-500/30 group-hover:scale-105 transition-transform"
+                />
+                {activeConversation.type !== 'group' && (
+                  <span
+                    className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 ${
+                      isLight ? 'border-white' : 'border-neutral-950'
+                    } ${isDirectPartnerOnline() ? 'bg-emerald-500' : 'bg-neutral-500'}`}
+                  />
+                )}
+              </div>
 
               <div className="min-w-0">
                 <div className="font-bold text-xs sm:text-sm truncate flex items-center gap-1.5">
@@ -413,26 +609,50 @@ export const AppLayout: React.FC = () => {
                     <span className="italic animate-pulse">typing...</span>
                   ) : activeConversation.type === 'group' ? (
                     <span className="text-neutral-400 group-hover:text-emerald-500 transition-colors">
-                      tap to edit group info & members
+                      tap for group info & members
+                    </span>
+                  ) : isDirectPartnerOnline() ? (
+                    <span className="text-emerald-500 font-semibold flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+                      online now · tap to view profile
                     </span>
                   ) : (
-                    <span>online</span>
+                    <span className="text-neutral-400 hover:underline">offline · tap to view profile</span>
                   )}
                 </div>
               </div>
             </div>
 
-            {/* Menu */}
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setShowMenu(!showMenu)}
-                className={`p-1.5 rounded-lg transition-colors ${
-                  isLight ? 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100' : 'text-neutral-400 hover:text-white hover:bg-neutral-800'
-                }`}
-              >
-                <MoreVertical className="w-4 h-4" />
-              </button>
+            <div className="flex items-center gap-2">
+              {/* Message counters: specifically highlighting messages for receiver */}
+              <div className="hidden sm:flex items-center gap-1 text-[10px] font-mono">
+                <span
+                  className="px-2 py-0.5 rounded-full font-semibold bg-emerald-500/15 text-emerald-500 border border-emerald-500/20 flex items-center gap-1"
+                  title="Messages sent for receiver (not for sender)"
+                >
+                  <span>📥 {messages.filter((m) => m.senderId !== currentUser?.id).length} for receiver</span>
+                </span>
+                <span
+                  className={`px-1.5 py-0.5 rounded-full ${
+                    isLight ? 'bg-neutral-100 text-neutral-500' : 'bg-neutral-900 text-neutral-400 border border-neutral-800'
+                  }`}
+                  title="Messages sent by you (sender)"
+                >
+                  📤 {messages.filter((m) => m.senderId === currentUser?.id).length} sent
+                </span>
+              </div>
+
+              {/* Menu */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowMenu(!showMenu)}
+                  className={`p-1.5 rounded-lg transition-colors ${
+                    isLight ? 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100' : 'text-neutral-400 hover:text-white hover:bg-neutral-800'
+                  }`}
+                >
+                  <MoreVertical className="w-4 h-4" />
+                </button>
 
               {showMenu && (
                 <div
@@ -441,7 +661,7 @@ export const AppLayout: React.FC = () => {
                     isLight ? 'bg-white border-neutral-200 text-neutral-800' : 'bg-neutral-900 border-neutral-800 text-neutral-200'
                   }`}
                 >
-                  {activeConversation.type === 'group' && (
+                  {activeConversation.type === 'group' ? (
                     <button
                       type="button"
                       onClick={() => {
@@ -454,6 +674,21 @@ export const AppLayout: React.FC = () => {
                     >
                       <Users className="w-3.5 h-3.5 text-emerald-500" />
                       <span>Group Profile & Members</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const partner = getDirectPartnerUser();
+                        if (partner) setSelectedUser(partner);
+                        setShowMenu(false);
+                      }}
+                      className={`w-full px-3 py-2 text-left flex items-center gap-2 ${
+                        isLight ? 'hover:bg-neutral-100' : 'hover:bg-neutral-800'
+                      }`}
+                    >
+                      <UserIcon className="w-3.5 h-3.5 text-emerald-500" />
+                      <span>View Profile</span>
                     </button>
                   )}
                   <button
@@ -504,6 +739,22 @@ export const AppLayout: React.FC = () => {
                     key={msg.id}
                     className={`flex items-end gap-2 ${isMe ? 'justify-end' : 'justify-start'}`}
                   >
+                    {/* Sender avatar for incoming messages */}
+                    {!isMe && (
+                      <img
+                        src={msg.senderAvatar || `https://api.dicebear.com/7.x/bottts-neutral/svg?seed=${msg.senderName}`}
+                        alt={msg.senderName}
+                        onClick={() => {
+                          const sender = registeredUsers.find(
+                            (u) => u.id === msg.senderId || u.username.toLowerCase() === msg.senderName.toLowerCase()
+                          );
+                          if (sender) setSelectedUser(sender);
+                        }}
+                        className="w-7 h-7 rounded-xl object-cover ring-1 ring-emerald-500/20 cursor-pointer hover:opacity-80 transition-opacity mb-1 shrink-0"
+                        title={`View ${msg.senderName}'s profile`}
+                      />
+                    )}
+
                     <div
                       onDoubleClick={() => toggleLikeMessage(msg.id)}
                       className={`max-w-[85%] sm:max-w-[70%] rounded-2xl p-3 shadow-xs relative group ${
@@ -516,7 +767,16 @@ export const AppLayout: React.FC = () => {
                     >
                       {/* Sender name in group */}
                       {activeConversation.type === 'group' && !isMe && (
-                        <div className="text-[10px] font-bold text-emerald-400 mb-1">
+                        <div
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const sender = registeredUsers.find(
+                              (u) => u.id === msg.senderId || u.username.toLowerCase() === msg.senderName.toLowerCase()
+                            );
+                            if (sender) setSelectedUser(sender);
+                          }}
+                          className="text-[10px] font-bold text-emerald-400 mb-1 cursor-pointer hover:underline"
+                        >
                           {msg.senderName}
                         </div>
                       )}
@@ -660,7 +920,7 @@ export const AppLayout: React.FC = () => {
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Simple Mobile Input Bar */}
+          {/* Mobile Input Bar */}
           <div
             className={`p-3 border-t relative ${
               isLight ? 'bg-white border-neutral-200' : 'bg-neutral-950/90 border-neutral-800/80'
@@ -774,15 +1034,27 @@ export const AppLayout: React.FC = () => {
               Select or start a chat
             </h3>
             <p className="text-xs text-neutral-400 mb-4">
-              Tap + in the top bar to message users present on data or create a group.
+              Switch to "In Glitch" to see everyone present in the platform, or tap + to start a chat.
             </p>
-            <button
-              type="button"
-              onClick={() => setShowNewChat(true)}
-              className="py-2 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-sm transition-colors"
-            >
-              + New Conversation
-            </button>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setSidebarTab('users')}
+                className="py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-sm transition-colors flex items-center gap-1.5"
+              >
+                <Globe className="w-3.5 h-3.5" />
+                <span>People in Glitch</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowNewChat(true)}
+                className={`py-2 px-3 rounded-xl border text-xs font-semibold transition-colors ${
+                  isLight ? 'bg-white border-neutral-200 hover:bg-neutral-50 text-neutral-800' : 'bg-neutral-900 border-neutral-800 hover:bg-neutral-800 text-white'
+                }`}
+              >
+                + New Chat
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -817,8 +1089,17 @@ export const AppLayout: React.FC = () => {
           isOpen={showGroupInfo}
           onClose={() => setShowGroupInfo(false)}
           conversation={activeConversation}
+          onViewUserProfile={(u) => setSelectedUser(u)}
         />
       )}
+
+      {/* User Profile Viewer Modal */}
+      <UserProfileModal
+        isOpen={!!selectedUser}
+        onClose={() => setSelectedUser(null)}
+        user={selectedUser}
+        onStartChat={handleOpenUserChat}
+      />
     </div>
   );
 };

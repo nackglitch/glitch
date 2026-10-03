@@ -19,12 +19,14 @@ interface GroupInfoModalProps {
   isOpen: boolean;
   onClose: () => void;
   conversation: Conversation;
+  onViewUserProfile?: (user: User) => void;
 }
 
 export const GroupInfoModal: React.FC<GroupInfoModalProps> = ({
   isOpen,
   onClose,
   conversation,
+  onViewUserProfile,
 }) => {
   const { currentUser, registeredUsers } = useAuth();
   const { updateGroupProfile, addMemberToGroup, removeMemberFromGroup, deleteConversation } = useChat();
@@ -320,15 +322,22 @@ export const GroupInfoModal: React.FC<GroupInfoModalProps> = ({
                 return (
                   <div
                     key={username}
-                    className={`p-2 rounded-xl border flex items-center justify-between ${
-                      isLight ? 'bg-neutral-50 border-neutral-200' : 'bg-neutral-950/60 border-neutral-800'
+                    onClick={() => {
+                      if (user && onViewUserProfile) {
+                        onViewUserProfile(user);
+                      }
+                    }}
+                    className={`p-2 rounded-xl border flex items-center justify-between cursor-pointer transition-colors ${
+                      isLight
+                        ? 'bg-neutral-50 hover:bg-neutral-100 border-neutral-200'
+                        : 'bg-neutral-950/60 hover:bg-neutral-900 border-neutral-800'
                     }`}
                   >
                     <div className="flex items-center gap-2 min-w-0">
                       <img
                         src={userAvatar}
                         alt={displayName}
-                        className="w-7 h-7 rounded-lg object-cover"
+                        className="w-7 h-7 rounded-lg object-cover ring-1 ring-emerald-500/20"
                       />
                       <div className="min-w-0">
                         <div className="text-xs font-semibold truncate flex items-center gap-1">

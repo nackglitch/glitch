@@ -1,10 +1,5 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { User } from '../types';
-
-interface StoredAccount {
-  user: User;
-  passwordHash: string;
-}
 
 interface AuthContextType {
   currentUser: User | null;
@@ -12,14 +7,14 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (username: string, pass: string) => Promise<{ success: boolean; error?: string }>;
-  signup: (username: string, pass: string, name?: string) => Promise<{ success: boolean; error?: string }>;
+  signup: (username: string, pass: string, name?: string, bio?: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
-  updateProfile: (updates: Partial<User>) => void;
+  updateProfile: (updates: Partial<User>) => Promise<void>;
+  refreshUsers: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const ACCOUNTS_STORAGE_KEY = 'glitch_registered_accounts';
 const CURRENT_USER_KEY = 'glitch_active_user';
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -32,21 +27,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   });
 
-  const [registeredUsers, setRegisteredUsers] = useState<User[]>(() => {
-    try {
-      const raw = localStorage.getItem(ACCOUNTS_STORAGE_KEY);
-      if (raw) {
-        const parsed: StoredAccount[] = JSON.parse(raw);
-        return parsed.map((a) => a.user);
-      }
-      return [];
-    } catch {
-      return [];
-    }
-  });
-
+  const [registeredUsers, setRegisteredUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
+  // Fetch all registered users present on Glitch server
+  const refreshUsers = useCallback(async () => {
+    try {
+      const res = await fetch('/api/users');
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.users)) {
+          setRegisteredUsers(data.users);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch users from server:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshUsers();
+    // Poll users every 10 seconds to ensure presence and new users stay in sync
+    const interval = setInterval(refreshUsers, 10000);
+    return () => clearInterval(interval);
+  }, [refreshUsers]);
+
+  // Persist current session
   useEffect(() => {
     if (currentUser) {
       localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(currentUser));
@@ -55,90 +61,64 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [currentUser]);
 
-  const getStoredAccounts = (): StoredAccount[] => {
-    try {
-      const raw = localStorage.getItem(ACCOUNTS_STORAGE_KEY);
-      return raw ? JSON.parse(raw) : [];
-    } catch {
-      return [];
-    }
-  };
-
+  // Login via Server (Permanent user credentials validation)
   const login = async (usernameInput: string, pass: string) => {
     setIsLoading(true);
-    await new Promise((r) => setTimeout(r, 200));
-    setIsLoading(false);
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: usernameInput,
+          password: pass,
+        }),
+      });
 
-    const cleanUsername = usernameInput.replace(/^@/, '').toLowerCase().trim();
-    if (!cleanUsername) {
-      return { success: false, error: 'Please enter your username.' };
+      const data = await res.json();
+      setIsLoading(false);
+
+      if (!res.ok) {
+        return { success: false, error: data.error || 'Failed to sign in.' };
+      }
+
+      setCurrentUser(data.user);
+      refreshUsers();
+      return { success: true };
+    } catch (err: any) {
+      setIsLoading(false);
+      return { success: false, error: err.message || 'Network error signing in.' };
     }
-    if (!pass) {
-      return { success: false, error: 'Please enter your password.' };
-    }
-
-    const accounts = getStoredAccounts();
-    const match = accounts.find((a) => a.user.username.toLowerCase() === cleanUsername);
-
-    if (!match) {
-      return { success: false, error: `No account found with username @${cleanUsername}. Please sign up first.` };
-    }
-
-    if (match.passwordHash !== pass) {
-      return { success: false, error: 'Incorrect password.' };
-    }
-
-    setCurrentUser(match.user);
-    return { success: true };
   };
 
-  const signup = async (usernameInput: string, pass: string, nameInput?: string) => {
+  // Sign Up via Server (Permanent registration - strictly prevents replacing/overwriting)
+  const signup = async (usernameInput: string, pass: string, nameInput?: string, bioInput?: string) => {
     setIsLoading(true);
-    await new Promise((r) => setTimeout(r, 200));
-    setIsLoading(false);
+    try {
+      const res = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: usernameInput,
+          password: pass,
+          name: nameInput,
+          bio: bioInput ? bioInput.trim() : '',
+        }),
+      });
 
-    const cleanUsername = usernameInput.replace(/^@/, '').toLowerCase().trim();
-    if (!cleanUsername || cleanUsername.length < 3) {
-      return { success: false, error: 'Username must be at least 3 characters.' };
+      const data = await res.json();
+      setIsLoading(false);
+
+      if (!res.ok) {
+        return { success: false, error: data.error || 'Failed to create account.' };
+      }
+
+      setCurrentUser(data.user);
+      refreshUsers();
+      return { success: true };
+    } catch (err: any) {
+      setIsLoading(false);
+      return { success: false, error: err.message || 'Network error registering.' };
     }
-    if (!/^[a-zA-Z0-9_]+$/.test(cleanUsername)) {
-      return { success: false, error: 'Username can only contain letters, numbers, and underscores.' };
-    }
-    if (!pass || pass.length < 4) {
-      return { success: false, error: 'Password must be at least 4 characters.' };
-    }
-
-    const accounts = getStoredAccounts();
-    if (accounts.some((a) => a.user.username.toLowerCase() === cleanUsername)) {
-      return { success: false, error: `Username @${cleanUsername} is already registered.` };
-    }
-
-    const displayName = nameInput?.trim() || cleanUsername;
-    const avatarUrl = `https://api.dicebear.com/7.x/bottts-neutral/svg?seed=${cleanUsername}`;
-
-    const newUser: User = {
-      id: `u_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
-      name: displayName,
-      username: cleanUsername,
-      avatar: avatarUrl,
-      bio: 'Hey there! I am using Glitch.',
-      status: 'online',
-      lastSeen: 'Active right now',
-      createdAt: new Date().toISOString(),
-      blockedUserIds: [],
-    };
-
-    const newAccount: StoredAccount = {
-      user: newUser,
-      passwordHash: pass,
-    };
-
-    const updatedAccounts = [...accounts, newAccount];
-    localStorage.setItem(ACCOUNTS_STORAGE_KEY, JSON.stringify(updatedAccounts));
-    setRegisteredUsers(updatedAccounts.map((a) => a.user));
-    setCurrentUser(newUser);
-
-    return { success: true };
   };
 
   const logout = () => {
@@ -146,17 +126,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.removeItem(CURRENT_USER_KEY);
   };
 
-  const updateProfile = (updates: Partial<User>) => {
+  const updateProfile = async (updates: Partial<User>) => {
     if (!currentUser) return;
-    const updated = { ...currentUser, ...updates };
-    setCurrentUser(updated);
+    try {
+      const res = await fetch(`/api/users/${currentUser.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
 
-    const accounts = getStoredAccounts();
-    const updatedAccounts = accounts.map((a) =>
-      a.user.id === currentUser.id ? { ...a, user: updated } : a
-    );
-    localStorage.setItem(ACCOUNTS_STORAGE_KEY, JSON.stringify(updatedAccounts));
-    setRegisteredUsers(updatedAccounts.map((a) => a.user));
+      if (res.ok) {
+        const data = await res.json();
+        setCurrentUser(data.user);
+        refreshUsers();
+      }
+    } catch (err) {
+      console.error('Error updating profile on server:', err);
+    }
   };
 
   return (
@@ -170,6 +156,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         signup,
         logout,
         updateProfile,
+        refreshUsers,
       }}
     >
       {children}
