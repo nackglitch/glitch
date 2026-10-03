@@ -1,0 +1,11 @@
+{
+  "name": "Aether Messenger",
+  "description": "A high-performance modern real-time messaging platform featuring direct chats, groups, broadcast channels, voice messages, rich media viewer, and comprehensive privacy controls.",
+  "requestFramePermissions": [
+    "clipboard-read",
+    "clipboard-write",
+    "microphone",
+    "camera"
+  ],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
