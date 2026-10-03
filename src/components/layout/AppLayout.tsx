@@ -440,11 +440,8 @@ export const AppLayout: React.FC = () => {
                         {conv.lastMessage ? formatTime(conv.lastMessage.createdAt) : ''}
                       </div>
                       {conv.unreadCount > 0 && (
-                        <span
-                          className="mt-1 px-1.5 py-0.5 rounded-full bg-emerald-500 text-[10px] font-bold text-white font-mono animate-pulse shadow-xs"
-                          title="New messages sent for receiver (not for sender)"
-                        >
-                          {conv.unreadCount} new
+                        <span className="mt-1 px-1.5 py-0.5 rounded-full bg-emerald-500 text-[10px] font-bold text-white font-mono">
+                          {conv.unreadCount}
                         </span>
                       )}
                     </div>
@@ -623,36 +620,17 @@ export const AppLayout: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              {/* Message counters: specifically highlighting messages for receiver */}
-              <div className="hidden sm:flex items-center gap-1 text-[10px] font-mono">
-                <span
-                  className="px-2 py-0.5 rounded-full font-semibold bg-emerald-500/15 text-emerald-500 border border-emerald-500/20 flex items-center gap-1"
-                  title="Messages sent for receiver (not for sender)"
-                >
-                  <span>📥 {messages.filter((m) => m.senderId !== currentUser?.id).length} for receiver</span>
-                </span>
-                <span
-                  className={`px-1.5 py-0.5 rounded-full ${
-                    isLight ? 'bg-neutral-100 text-neutral-500' : 'bg-neutral-900 text-neutral-400 border border-neutral-800'
-                  }`}
-                  title="Messages sent by you (sender)"
-                >
-                  📤 {messages.filter((m) => m.senderId === currentUser?.id).length} sent
-                </span>
-              </div>
-
-              {/* Menu */}
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setShowMenu(!showMenu)}
-                  className={`p-1.5 rounded-lg transition-colors ${
-                    isLight ? 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100' : 'text-neutral-400 hover:text-white hover:bg-neutral-800'
-                  }`}
-                >
-                  <MoreVertical className="w-4 h-4" />
-                </button>
+            {/* Menu */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowMenu(!showMenu)}
+                className={`p-1.5 rounded-lg transition-colors ${
+                  isLight ? 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100' : 'text-neutral-400 hover:text-white hover:bg-neutral-800'
+                }`}
+              >
+                <MoreVertical className="w-4 h-4" />
+              </button>
 
               {showMenu && (
                 <div

@@ -132,13 +132,6 @@ function loadDatabase(): DatabaseState {
     });
   }
 
-  // Clean up any previously auto-generated placeholder bios
-  loadedState.users.forEach((u) => {
-    if (u.bio === 'Hey there! I am using Glitch.') {
-      u.bio = '';
-    }
-  });
-
   return loadedState;
 }
 
@@ -204,11 +197,10 @@ app.get('/api/health', (_req, res) => {
 
 // 2. Auth: Sign Up (Permanent Registration - Prevents any overwrite)
 app.post('/api/auth/signup', (req, res) => {
-  const { username, password, name, bio } = req.body;
+  const { username, password, name } = req.body;
   const cleanUsername = String(username || '').replace(/^@/, '').toLowerCase().trim();
   const cleanPassword = String(password || '').trim();
   const displayName = String(name || '').trim() || cleanUsername;
-  const userBio = bio ? String(bio).trim() : '';
 
   if (!cleanUsername || cleanUsername.length < 3) {
     return res.status(400).json({ error: 'Username must be at least 3 characters long.' });
@@ -235,7 +227,7 @@ app.post('/api/auth/signup', (req, res) => {
     name: displayName,
     username: cleanUsername,
     avatar: `https://api.dicebear.com/7.x/bottts-neutral/svg?seed=${cleanUsername}`,
-    bio: userBio,
+    bio: 'Hey there! I am using Glitch.',
     status: 'online',
     lastSeen: 'Active right now',
     createdAt: new Date().toISOString(),

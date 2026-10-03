@@ -7,7 +7,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (username: string, pass: string) => Promise<{ success: boolean; error?: string }>;
-  signup: (username: string, pass: string, name?: string, bio?: string) => Promise<{ success: boolean; error?: string }>;
+  signup: (username: string, pass: string, name?: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   updateProfile: (updates: Partial<User>) => Promise<void>;
   refreshUsers: () => Promise<void>;
@@ -91,7 +91,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   // Sign Up via Server (Permanent registration - strictly prevents replacing/overwriting)
-  const signup = async (usernameInput: string, pass: string, nameInput?: string, bioInput?: string) => {
+  const signup = async (usernameInput: string, pass: string, nameInput?: string) => {
     setIsLoading(true);
     try {
       const res = await fetch('/api/auth/signup', {
@@ -101,7 +101,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           username: usernameInput,
           password: pass,
           name: nameInput,
-          bio: bioInput ? bioInput.trim() : '',
         }),
       });
 

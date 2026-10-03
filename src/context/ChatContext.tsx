@@ -61,17 +61,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   });
 
-  const [activeConversationId, setActiveConversationIdRaw] = useState<string | null>(null);
-
-  const setActiveConversationId = useCallback((id: string | null) => {
-    setActiveConversationIdRaw(id);
-    if (id) {
-      setConversations((prev) =>
-        prev.map((c) => (c.id === id ? { ...c, unreadCount: 0 } : c))
-      );
-    }
-  }, []);
-
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [typingUsers, setTypingUsers] = useState<Record<string, string[]>>({});
 
@@ -198,13 +188,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return { ...prev, [msg.conversationId]: [...list, msg] };
         });
 
-        const isFromMe = msg.senderId === currentUser?.id;
-        const unreadForReceiver = isFromMe
-          ? 0
-          : activeConversationId === msg.conversationId
-          ? 0
-          : 1;
-
         setConversations((prev) => {
           const exists = prev.some((c) => c.id === msg.conversationId);
           if (!exists) {
@@ -216,7 +199,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
               participantIds: [msg.senderId],
               isPinned: false,
               isMuted: false,
-              unreadCount: unreadForReceiver,
+              unreadCount: activeConversationId === msg.conversationId ? 0 : 1,
               lastMessage: {
                 text: msg.text || (msg.type === 'voice' ? 'Voice memo' : 'Photo'),
                 senderId: msg.senderId,
@@ -242,11 +225,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     status: 'delivered',
                     type: msg.type,
                   },
-                  unreadCount: isFromMe
-                    ? 0
-                    : activeConversationId === msg.conversationId
-                    ? 0
-                    : (c.unreadCount || 0) + 1,
+                  unreadCount: activeConversationId === msg.conversationId ? 0 : c.unreadCount + 1,
                 }
               : c
           );
@@ -357,7 +336,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         c.id === activeConversationId
           ? {
               ...c,
-              unreadCount: 0,
               lastMessage: {
                 text: text.trim() || (type === 'voice' ? 'Voice memo' : 'Photo'),
                 senderId: currentUser.id,

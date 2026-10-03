@@ -13,7 +13,6 @@ export const AuthPage: React.FC = () => {
   const [displayName, setDisplayName] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [bio, setBio] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -21,7 +20,7 @@ export const AuthPage: React.FC = () => {
     setErrorMsg(null);
 
     if (isSignUp) {
-      const res = await signup(username, password, displayName, bio);
+      const res = await signup(username, password, displayName);
       if (!res.success && res.error) {
         setErrorMsg(res.error);
       }
@@ -183,30 +182,6 @@ export const AuthPage: React.FC = () => {
                     }`}
                   />
                 </div>
-              </div>
-            )}
-
-            {/* Custom Bio (User adds their own) */}
-            {isSignUp && (
-              <div>
-                <label
-                  className={`block text-[11px] font-semibold uppercase tracking-wider mb-1 ${
-                    isLight ? 'text-neutral-600' : 'text-neutral-400'
-                  }`}
-                >
-                  Your Bio (Optional)
-                </label>
-                <textarea
-                  value={bio}
-                  onChange={(e) => setBio(e.target.value)}
-                  placeholder="Tell others about yourself..."
-                  rows={2}
-                  className={`w-full rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 resize-none transition-colors ${
-                    isLight
-                      ? 'bg-neutral-100 border border-neutral-200 text-neutral-900 placeholder:text-neutral-400'
-                      : 'bg-neutral-950 border border-neutral-800 text-neutral-100 placeholder:text-neutral-600'
-                  }`}
-                />
               </div>
             )}
 
